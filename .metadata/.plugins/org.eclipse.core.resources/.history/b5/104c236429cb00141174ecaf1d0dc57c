@@ -1,0 +1,81 @@
+// Author: Jonathan Lim Siu Chi
+// Matric Number : A0110839H
+
+import java.net.*;
+import java.io.FileInputStream;
+import java.io.BufferedInputStream;
+import java.io.File;
+
+class FileSender {
+    
+    public DatagramSocket senderSocket; 
+    public DatagramPacket pkt;
+    
+    private static final int MAX_PACKET_SIZE = 1000;
+    
+    public static void main(String[] args) {
+        
+        // check if the number of command line argument is 4
+        if (args.length != 4) {
+            System.out.println("Usage: java FileSender <path/filename> "
+                                   + "<rcvHostName> <rcvPort> <rcvFileName>");
+            System.exit(1);
+        }
+        
+        new FileSender(args[0], args[1], args[2], args[3]);
+    }
+    
+    public FileSender(String fileToOpen, String host, String port, String rcvFileName) {
+        
+        // Refer to Assignment 0 Ex #3 on how to open a file
+        
+        // UDP transmission is unreliable. Sender may overrun
+        // receiver if sending too fast, giving packet lost as a result.
+        // In that sense, sender may need to pause once in a while.
+        // E.g. Thread.sleep(1); // pause for 1 millisecond
+    	
+    	try{
+    		
+    		//get port number and IP address of receiver
+	    	int portNumber = Integer.parseInt(port);
+	    	InetAddress receiverAddress = InetAddress.getByName(host);
+	    	
+	    	//create client socket
+	    	senderSocket = new DatagramSocket();
+	    	
+	    	//create fileName datagram packet to send to receiver
+	    	byte[] fileName = rcvFileName.getBytes();
+	      	DatagramPacket fileNamePacket = new DatagramPacket(fileName, fileName.length, receiverAddress, portNumber);
+	   
+	      	//send fileName datagram packet
+	      	senderSocket.send(fileNamePacket);
+	      	Thread.sleep(1);
+	      	
+	      	//send fileSize datagram packet
+	      	File file = new File(fileToOpen);
+	      	byte[] fileSizeBuffer = ("" + file.length()).getBytes();
+	      	DatagramPacket fileSizePacket = new DatagramPacket(fileSizeBuffer, fileSizeBuffer.length, receiverAddress, portNumber);
+	      	senderSocket.send(fileSizePacket);
+	      	Thread.sleep(1);
+	      	
+	  	//sending file in packets of at most 1000 bytes
+	      	FileInputStream input = new FileInputStream(file);
+	      	byte[] fileBuffer = new byte[MAX_PACKET_SIZE];
+	      	int numOfBytes = 0;
+	      		    
+	      	while((numOfBytes = input.read(fileBuffer))!= -1){
+	      		DatagramPacket packet = new DatagramPacket(fileBuffer, numOfBytes, receiverAddress, portNumber);
+	      		senderSocket.send(packet);
+	      		Thread.sleep(1);
+	      	}
+	      	
+	      	int fileSizeInBytes = (int) file.length();
+	       	System.out.println("File of " + fileSizeInBytes + " bytes is sent.");
+	      	input.close();
+	      	senderSocket.close();
+	      	
+    	}catch(Exception e){
+    		e.printStackTrace();
+    	}
+    }
+}
