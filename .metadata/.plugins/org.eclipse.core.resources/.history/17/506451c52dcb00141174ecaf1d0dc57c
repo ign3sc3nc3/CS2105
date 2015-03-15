@@ -19,7 +19,7 @@ public class FileReceiver {
 
 	// check if the number of command line argument is 1
 	if (args.length != 1) {
-	    System.out.println("Usage: java FileReceiver <port>");
+	    System.out.println("Usage: java FileReceiver port");
 	    System.exit(1);
 	}
 
