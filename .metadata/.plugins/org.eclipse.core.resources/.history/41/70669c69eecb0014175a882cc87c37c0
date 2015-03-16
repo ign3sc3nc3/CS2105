@@ -1,0 +1,113 @@
+// Author: Jonathan Lim Siu Chi
+// Matric Number : A0110839H
+
+import java.net.*;
+import java.nio.ByteBuffer;
+import java.io.BufferedOutputStream;
+import java.io.FileOutputStream;
+import java.io.File;
+import java.io.BufferedOutputStream;
+import java.io.IOException;
+import java.util.zip.CRC32;
+
+public class FileReceiver {
+
+    private DatagramSocket receiverSocket;
+    private int portNumber;
+    
+    private static final int MAX_PACKET_SIZE = 1000;
+
+    public static void main(String[] args) {
+
+	// check if the number of command line argument is 1
+	if (args.length != 1) {
+	    System.out.println("Usage: java FileReceiver <port>");
+	    System.exit(1);
+	}
+
+	FileReceiver receiver = new FileReceiver(args[0]);
+	receiver.receive();
+    
+    }
+
+    public FileReceiver(String localPort) {
+    	this.portNumber = Integer.parseInt(localPort);
+    }
+    
+    public void receive(){
+    	try {
+    	    receiverSocket = new DatagramSocket(portNumber);
+    	    byte[] receiverBuffer = new byte[MAX_PACKET_SIZE];
+
+    	    // get output file name
+    	    DatagramPacket fileNamePacket = new DatagramPacket(receiverBuffer, receiverBuffer.length);
+    	    receiverSocket.receive(fileNamePacket);
+    	    byte[] packet = fileNamePacket.getData();
+    	    CRC32 checksum = new CRC32();
+    	    checksum.update(packet, 8, packet.length-8);
+    	    long checksumValue = checksum.getValue();
+    	    
+    	    byte[] checksumArray = new byte[8];
+    	    for(int i=0; i<8; i++){
+    	    	checksumArray[i] = packet[i];
+    	    }
+    	    long checksumFromPacket = ByteLongUtil.byteArrayToLong(checksumArray);
+    	    if(checksumFromPacket == checksumValue){
+    	    	System.out.println("Checksum matches!");
+    	    }
+    	    else{
+    	    	System.out.println("Checksum failed!");
+    	    }
+    	    
+    	    String fileName = new String(packet, 16, packet.length-16).trim();
+    	    System.out.println(fileName);
+
+    	    // get file size
+    	    DatagramPacket fileSizePacket = new DatagramPacket(receiverBuffer, receiverBuffer.length);
+    	    receiverSocket.receive(fileSizePacket);
+    	    String fileSizeString = new String(fileSizePacket.getData(), 0, fileSizePacket.getLength());
+    	    int fileSizeInBytes = Integer.parseInt(fileSizeString);
+    	    
+    	    File fileToWrite = new File(fileName);
+    	    if(!fileToWrite.exists()){
+    	    	fileToWrite.createNewFile();
+    	    }
+    	    // write to file as long as the file size is smaller than the expected size
+    	    BufferedOutputStream output = new BufferedOutputStream(new FileOutputStream(fileName, true));
+    	    int numOfBytes = 0;
+
+    	    while (numOfBytes < fileSizeInBytes) {
+    		DatagramPacket filePacket = new DatagramPacket(receiverBuffer,receiverBuffer.length);
+    		receiverSocket.receive(filePacket);
+    		
+    		output.write(filePacket.getData(), 0, filePacket.getLength());
+    		numOfBytes += filePacket.getLength();
+
+    	    }
+    	    
+    	    System.out.println("File of " + numOfBytes + " bytes is received.");
+    	    output.close();
+    	    receiverSocket.close();
+
+    	} catch (IOException e) {
+    	    e.printStackTrace();
+    	}
+
+        
+    }
+   
+    private static class ByteLongUtil{
+		private static ByteBuffer buffer = ByteBuffer.allocate(Long.BYTES);
+		
+		private static byte[] longToByteArray(Long value){
+			buffer.putLong(0, value);
+			return buffer.array();
+		}
+		
+		private static long byteArrayToLong(byte[] array){
+			buffer.put(array, 0, array.length);
+			buffer.flip();
+			return buffer.getLong();
+		}
+	}
+}

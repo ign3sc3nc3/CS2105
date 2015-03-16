@@ -2,11 +2,13 @@
 // Matric Number : A0110839H
 
 import java.net.*;
+import java.nio.ByteBuffer;
 import java.io.BufferedOutputStream;
 import java.io.FileOutputStream;
 import java.io.File;
 import java.io.BufferedOutputStream;
 import java.io.IOException;
+import java.util.zip.CRC32;
 
 public class FileReceiver {
 
@@ -40,15 +42,28 @@ public class FileReceiver {
     	    // get output file name
     	    DatagramPacket fileNamePacket = new DatagramPacket(receiverBuffer, receiverBuffer.length);
     	    receiverSocket.receive(fileNamePacket);
-
-    	    String fileName = new String(fileNamePacket.getData(), 0, fileNamePacket.getLength());
+    	    byte[] receivedPacket = fileNamePacket.getData();
+    	    
+    	    isChecksumValid(receivedPacket);
+    	    
+    	    int index = ByteConversionUtil.subByteArrayToInt(receivedPacket, 8);
+    	    System.out.println("Packet Index: " + index);
+    	   
+    	    //Payload begins on the 12th byte
+    	    String fileName = new String(receivedPacket, 12, receivedPacket.length-12).trim();
+    	    System.out.println(fileName);
 
     	    // get file size
     	    DatagramPacket fileSizePacket = new DatagramPacket(receiverBuffer, receiverBuffer.length);
     	    receiverSocket.receive(fileSizePacket);
     	    String fileSizeString = new String(fileSizePacket.getData(), 0, fileSizePacket.getLength());
     	    int fileSizeInBytes = Integer.parseInt(fileSizeString);
-
+    	    
+    	    /*File fileToWrite = new File(fileName);
+    	    if(!fileToWrite.exists()){
+    	    	fileToWrite.createNewFile();
+    	    }
+    	    */
     	    // write to file as long as the file size is smaller than the expected size
     	    BufferedOutputStream output = new BufferedOutputStream(new FileOutputStream(fileName, true));
     	    int numOfBytes = 0;
@@ -72,4 +87,60 @@ public class FileReceiver {
 
         
     }
+
+		private void isChecksumValid(byte[] packet) {
+			CRC32 checksum = new CRC32();
+			
+			//Packet bytes 0-7 is for storing checksum, so compute from byte 8 onwards
+			checksum.update(packet, 8, packet.length-8);
+			long checksumValueComputed = checksum.getValue();
+			
+			byte[] checksumArray = new byte[8];
+			for(int i=0; i<8; i++){
+				checksumArray[i] = packet[i];
+			}
+			long checksumStoredInPacket = ByteConversionUtil.byteArrayToLong(checksumArray);
+			if(checksumStoredInPacket == checksumValueComputed){
+				System.out.println("Checksum matches!");
+				System.out.println("Checksum value: " + checksumValueComputed);
+			}
+			else{
+				System.out.println("Checksum failed!");
+			}
+		}
+   
+    private static class ByteConversionUtil{
+		private static ByteBuffer longBuffer = ByteBuffer.allocate(Long.BYTES);
+		private static ByteBuffer intBuffer = ByteBuffer.allocate(Integer.BYTES);
+		
+		private static byte[] longToByteArray(long value){
+			longBuffer.putLong(0, value);
+			return longBuffer.array();
+		}
+		
+		private static long byteArrayToLong(byte[] array){
+			longBuffer.put(array, 0, array.length);
+			longBuffer.flip();
+			return longBuffer.getLong();
+		}
+		
+		private static int byteArrayToInt(byte[] array){
+			intBuffer.put(array, 0, array.length);
+			intBuffer.flip();
+			return intBuffer.getInt();
+		}
+		
+		private static byte[] intToByteArray(int value){
+			intBuffer.putInt(0, value);
+			return intBuffer.array();
+		}
+		
+		private static int subByteArrayToInt(byte[] array, int start){
+			byte[] intByteArray = new byte[4];
+			System.arraycopy(array, start, intByteArray, 0, Integer.BYTES);
+			intBuffer.put(array, 0, intByteArray.length);
+			intBuffer.flip();
+			return intBuffer.getInt();
+		}
+	}
 }

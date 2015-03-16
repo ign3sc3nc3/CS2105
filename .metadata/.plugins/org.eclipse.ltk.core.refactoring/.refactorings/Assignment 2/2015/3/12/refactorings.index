@@ -1,0 +1,2 @@
+1426521310183	Extract method 'isChecksumValid'
+1426522328445	Extract method 'addChecksumToPacketHeader'
